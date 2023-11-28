@@ -50,6 +50,9 @@ impl<T: Debug> Graph<T> {
         stack.push(start_id);
 
         while let Some(node_id) = stack.pop() {
+            if visited.contains(&node_id) {
+                continue;
+            }
             visited.insert(node_id);
             path.push(node_id);
 
@@ -75,9 +78,9 @@ impl<T: Debug> Graph<T> {
         let mut queue: VecDeque<usize> = VecDeque::new();
 
         queue.push_front(start_id);
+        visited.insert(start_id);
 
         while let Some(node_id) = queue.pop_back() {
-            visited.insert(node_id);
             path.push(node_id);
 
             let node = self.get_node(node_id).unwrap();
@@ -91,8 +94,14 @@ impl<T: Debug> Graph<T> {
                 }
 
                 queue.push_front(adjucent_node_id);
+                visited.insert(adjucent_node_id);
             }
         }
+        path
+    }
+
+    pub fn dijkstra_dist(&self, start_id: usize, to_id: usize) -> Vec<usize> {
+        let mut path: Vec<usize> = Vec::new();
         path
     }
 
@@ -239,6 +248,8 @@ mod tests {
         graph.add_edge(node2, node4, 1).unwrap();
         graph.add_edge(node4, node5, 1).unwrap();
         graph.add_edge(node3, node6, 2).unwrap();
+        graph.add_edge(node6, node5, 1).unwrap();
+        graph.add_edge(node5, node1, 1).unwrap();
         graph
     }
 
