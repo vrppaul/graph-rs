@@ -1,4 +1,5 @@
-use std::collections::{HashSet, VecDeque};
+use std::cmp;
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::fmt::{self, Debug, Formatter};
 use std::hash::{Hash, Hasher};
 
@@ -100,9 +101,42 @@ impl<T: Debug> Graph<T> {
         path
     }
 
-    pub fn dijkstra_dist(&self, start_id: usize, to_id: usize) -> Vec<usize> {
+    pub fn dijkstra_dist(&self, start_id: usize, to_id: usize) -> (usize, Vec<usize>) {
+        let mut previous: Vec<Option<usize>> = vec![None; self.nodes.len()];
+        let mut queue: VecDeque<usize> = VecDeque::new();
+        let mut distances: Vec<usize> = vec![usize::MAX; self.nodes.len()];
+
+        queue.push_front(start_id);
+        distances[start_id] = 0;
+
+        while let Some(node_id) = queue.pop_back() {
+            let node: &GraphNode<T> = self.get_node(node_id).unwrap();
+            let current_node_dist = distances[node_id];
+
+            let mut edges: Vec<&GraphEdge> = node.edges.iter().collect();
+            edges.sort_by(|e1, e2| e1.weight.cmp(&e2.weight));
+
+            for edge in edges {
+                let edge_node_dist = distances[edge.into];
+                let new_dist = cmp::min(current_node_dist + edge.weight, edge_node_dist);
+
+                if new_dist < edge_node_dist {
+                    distances[edge.into] = new_dist;
+                    queue.push_front(edge.into);
+                    previous[edge.into] = Some(node_id);
+                }
+            }
+        }
+
+        let mut current_id = to_id;
         let mut path: Vec<usize> = Vec::new();
-        path
+        while let Some(prev_id) = previous[current_id] {
+            path.push(current_id);
+            current_id = prev_id;
+        }
+        path.push(start_id);
+        path.reverse();
+        (distances[to_id], path)
     }
 
     pub fn show(&self) {
