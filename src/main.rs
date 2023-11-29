@@ -1,4 +1,5 @@
-use graph_rs::Graph;
+mod graph;
+use crate::graph::Graph;
 
 #[macro_use]
 mod macros;
