@@ -1,7 +1,35 @@
-use std::cmp;
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::cmp::{self, Ordering};
+use std::collections::{BinaryHeap, HashMap, HashSet, VecDeque};
 use std::fmt::{self, Debug, Formatter};
 use std::hash::{Hash, Hasher};
+
+#[derive(Eq)]
+struct State {
+    cost: usize,
+    position: usize,
+}
+
+// The priority queue depends on `Ord`.
+// Explicitly implement the trait so the queue becomes a min-heap
+// instead of a max-heap.
+impl Ord for State {
+    fn cmp(&self, other: &Self) -> Ordering {
+        // Notice that the we flip the ordering here
+        other.cost.cmp(&self.cost)
+    }
+}
+
+impl PartialOrd for State {
+    fn partial_cmp(&self, other: &State) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl PartialEq for State {
+    fn eq(&self, other: &State) -> bool {
+        self.cost == other.cost
+    }
+}
 
 pub struct Graph<T> {
     nodes: Vec<GraphNode<T>>,
@@ -103,33 +131,39 @@ impl<T: Debug> Graph<T> {
 
     pub fn dijkstra_dist(&self, start_id: usize, to_id: usize) -> (usize, Vec<usize>) {
         let mut previous: Vec<Option<usize>> = vec![None; self.nodes.len()];
-        let mut queue: VecDeque<usize> = VecDeque::new();
         let mut distances: Vec<usize> = vec![usize::MAX; self.nodes.len()];
+        let mut heap = BinaryHeap::new();
 
-        queue.push_front(start_id);
         distances[start_id] = 0;
+        heap.push(State {
+            cost: 0,
+            position: start_id,
+        });
 
-        while let Some(node_id) = queue.pop_back() {
-            let node: &GraphNode<T> = self.get_node(node_id).unwrap();
-            let current_node_dist = distances[node_id];
+        while let Some(State { cost, position }) = heap.pop() {
+            if position == to_id {
+                break;
+            }
+            if cost > distances[position] {
+                continue;
+            }
 
-            let mut edges: Vec<&GraphEdge> = node.edges.iter().collect();
-            edges.sort_by(|e1, e2| e1.weight.cmp(&e2.weight));
+            for edge in &self.nodes[position].edges {
+                let next = State {
+                    cost: cost + edge.weight,
+                    position: edge.into,
+                };
 
-            for edge in edges {
-                let edge_node_dist = distances[edge.into];
-                let new_dist = cmp::min(current_node_dist + edge.weight, edge_node_dist);
-
-                if new_dist < edge_node_dist {
-                    distances[edge.into] = new_dist;
-                    queue.push_front(edge.into);
-                    previous[edge.into] = Some(node_id);
+                if next.cost < distances[next.position] {
+                    distances[next.position] = next.cost;
+                    previous[next.position] = Some(position);
+                    heap.push(next);
                 }
             }
         }
 
+        let mut path = Vec::new();
         let mut current_id = to_id;
-        let mut path: Vec<usize> = Vec::new();
         while let Some(prev_id) = previous[current_id] {
             path.push(current_id);
             current_id = prev_id;
@@ -270,32 +304,47 @@ mod tests {
     use crate::Graph;
 
     fn prepare_graph() -> Graph<usize> {
+        // Graph will have the following structure:
+        //
+        // 0 -(1)-> 1 -(1)-> 3 -(1)-> 4 -(1)-> 0
+        // |        |                 ^
+        // |(1)     |(3)              | (1)
+        // v        v                 |
+        // 2 -(2)-> 5 ----------------+
+        //
         let mut graph = Graph::new();
-        let node1 = graph.add_node(11);
-        let node2 = graph.add_node(22);
-        let node3 = graph.add_node(33);
-        let node4 = graph.add_node(44);
-        let node5 = graph.add_node(55);
-        let node6 = graph.add_node(66);
-        graph.add_edge(node1, node2, 1).unwrap();
+        let node0 = graph.add_node(11);
+        let node1 = graph.add_node(22);
+        let node2 = graph.add_node(33);
+        let node3 = graph.add_node(44);
+        let node4 = graph.add_node(55);
+        let node5 = graph.add_node(66);
+        graph.add_edge(node0, node1, 1).unwrap();
+        graph.add_edge(node0, node2, 1).unwrap();
         graph.add_edge(node1, node3, 1).unwrap();
-        graph.add_edge(node2, node4, 1).unwrap();
-        graph.add_edge(node4, node5, 1).unwrap();
-        graph.add_edge(node3, node6, 2).unwrap();
-        graph.add_edge(node6, node5, 1).unwrap();
-        graph.add_edge(node5, node1, 1).unwrap();
+        graph.add_edge(node1, node5, 3).unwrap();
+        graph.add_edge(node3, node4, 1).unwrap();
+        graph.add_edge(node2, node5, 2).unwrap();
+        graph.add_edge(node5, node4, 1).unwrap();
+        graph.add_edge(node4, node0, 1).unwrap();
         graph
     }
 
     #[test]
     fn correct_dfs() {
         let graph = prepare_graph();
-        assert_eq!(graph.dfs(0), [0, 1, 3, 4, 2, 5]);
+        assert_eq!(graph.dfs(0), [0, 1, 3, 4, 5, 2]);
     }
 
     #[test]
     fn correct_bfs() {
         let graph = prepare_graph();
         assert_eq!(graph.bfs(0), [0, 1, 2, 3, 5, 4]);
+    }
+
+    #[test]
+    fn correct_dijkstra_dist() {
+        let graph = prepare_graph();
+        assert_eq!(graph.dijkstra_dist(0, 5), (3, vec![0, 2, 5]));
     }
 }
